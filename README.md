@@ -4,6 +4,13 @@ Yet another [todo backend](http://todobackend.com) written in Python 3.5 with ai
 
 ## Usage
 
+Before starting the app, or if you want to redo the tables:
+```
+python3 sqlalchemy_insert.py
+```
+
+
+To start the app:
 ```
 python3 -m aiohttp.web -P 8080 aiotodo:app_factory
 ```

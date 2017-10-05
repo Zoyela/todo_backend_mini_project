@@ -1,21 +1,28 @@
 from aiohttp import web
 from dbhelper import create_db_connection
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
-from todosAndTags import Todo
+from todos_and_tags import Todo, Tag
 from sqlalchemy import func
 import aiohttp_cors
 
 
-TODOS = [
-    {'title': 'build an API', 'order': 1, 'completed': False},
-    {'title': '?????', 'order': 2, 'completed': False},
-    {'title': 'profit!', 'order': 3, 'completed': False}
-]
-
-
 def get_all_todos(request):
     session = request.app['session']()
-    todo_list = session.query(Todo).all()
+
+    if 'tag' in request.query:
+        try:
+            tag = session.query(Tag).filter_by(id=request.query['tag']).one()
+        except MultipleResultsFound:
+            return web.json_response({
+                'error': 'Found multiple tags with given id, not just one as expected'
+            }, status=500)
+        except NoResultFound:
+            return web.json_response({
+                'error': 'Found no tag with the given id'
+            }, status=404)
+        todo_list = tag.todos
+    else:
+        todo_list = session.query(Todo).all()
 
     return web.json_response([todo.to_dictionary() for todo in todo_list])
 
@@ -47,7 +54,6 @@ def get_one_todo(request):
     return web.json_response(todo.to_dictionary(), status=200)
 
 
-# todo
 async def create_todo(request):
     session = request.app['session']()
     data = await request.json()
@@ -75,25 +81,146 @@ async def create_todo(request):
 
 async def update_todo(request):
     id = int(request.match_info['id'])
-
-    if id >= len(TODOS):
-        return web.json_response({'error': 'Todo not found'}, status=404)
-
+    session = request.app['session']()
     data = await request.json()
-    TODOS[id].update(data)
 
-    return web.json_response(TODOS[id])
+    try:
+        todo = session.query(Todo).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple todos with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no todo with the given id'
+        }, status=404)
+
+    if 'title' in data:
+        todo.title = data['title']
+
+    if 'placeNumber' in data:
+        todo.title = data['placeNumber']
+
+    if 'completed' in data:
+        todo.title = data['completed']
+
+    session.commit()
+
+    return web.json_response(todo.to_dictionary(), status=200)
 
 
 def remove_todo(request):
     id = int(request.match_info['id'])
+    session = request.app['session']()
 
-    if id >= len(TODOS):
-        return web.json_response({'error': 'Todo not found'})
+    try:
+        todo = session.query(Todo).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple todos with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no todo with the given id'
+        }, status=404)
 
-    del TODOS[id]
+    session.delete(todo)
+    session.commit()
 
-    return web.Response(status=204)
+    return web.json_response(status=204)
+
+# tags
+def get_all_tags(request):
+    session = request.app['session']()
+    tag_list = session.query(Tag).all()
+
+    return web.json_response([tag.to_dictionary() for tag in tag_list])
+
+
+async def create_tag(request):
+    session = request.app['session']()
+    data = await request.json()
+
+    if not 'name' in data:
+        return web.json_response({'error': '"name" is a required field'})
+    name = data['name']
+    if not isinstance(name, str) or not len(name):
+        return web.json_response({'error': '"name" must be a string with at least one character'})
+
+    tag = Tag(name=name)
+
+    data['url'] = str(request.url.join(request.app.router['one_todo'].url_for(id=tag.id)))
+
+    session.add(tag)
+    session.commit()
+
+    return web.Response(
+        headers={'Location': data['url']},
+        status=303
+    )
+
+
+def get_one_tag(request):
+    id = int(request.match_info['id'])
+
+    session = request.app['session']()
+    try:
+        tag = session.query(Tag).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple tags with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no tag with the given id'
+        }, status=404)
+
+    return web.json_response(tag.to_dictionary(), status=200)
+
+
+async def update_tag(request):
+    id = int(request.match_info['id'])
+    session = request.app['session']()
+    data = await request.json()
+
+    try:
+        tag = session.query(Tag).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple tags with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no tag with the given id'
+        }, status=404)
+
+    if 'name' in data:
+        tag.name = data['name']
+
+    session.commit()
+
+    return web.json_response(tag.to_dictionary(), status=200)
+
+
+def remove_tag(request):
+    id = int(request.match_info['id'])
+    session = request.app['session']()
+
+    try:
+        tag = session.query(Tag).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple tag with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no tag with the given id'
+        }, status=404)
+
+    session.delete(tag)
+    session.commit()
+
+    return web.json_response(status=204)
 
 
 def app_factory(args=()):
@@ -117,23 +244,23 @@ def app_factory(args=()):
     cors.add(app.router.add_patch('/todos/{id:\d+}', update_todo, name='update_todo'))
     cors.add(app.router.add_delete('/todos/{id:\d+}', remove_todo, name='remove_todo'))
 
-
-    #cors.add(app.router.add.get('/tags/', get_all_tags, name='all_tags'))
-    #cors.add(app.router.add.post('/tags/', create_tag, name='create_tag'))
-    #cors.add(app.router.add.get('/tags/{id:\d+}', get_all_tags, name='all_tags'))
-    #cors.add(app.router.add.put('/tags/{id:\d+}', put_tag, name='put_tag'))
-    #cors.add(app.router.add.delete('/tags/{id:\d+}', delete_tag, name='delete_tag'))
+    cors.add(app.router.add_get('/tags/', get_all_tags, name='all_tags'))
+    cors.add(app.router.add_post('/tags/', create_tag, name='create_tag'))
+    cors.add(app.router.add_get('/tags/{id:\d+}', get_one_tag, name='one_tag'))
+    cors.add(app.router.add_patch('/tags/{id:\d+}', update_tag, name='update_tag'))
+    cors.add(app.router.add_delete('/tags/{id:\d+}', remove_tag, name='remove_tag'))
 
     return app
 
 
 # Tags
-# List all tags GET /tags/
-# Create a tag POST /tags/
-# Fetch a tag GET /tags/:tag_id
-# Update a tag PUT /tags/:tag_id
-# Delete a tag DELETE /tags/:tag_id
-# Todos
+# List all tags GET /tags/ ok
+# Create a tag POST /tags/ ok
+# Fetch a tag GET /tags/:tag_id ok
+# Update a tag PUT /tags/:tag_id ok
+# Delete a tag DELETE /tags/:tag_id ok
+
+# Todo
 # List all todos with a specific tag GET /todos/?tag=:tag_id
 # List all tags of a todo_ GET /todos/:todo_id/tags/
 # Tag a todo_ POST /todos/:todo_id/tags/

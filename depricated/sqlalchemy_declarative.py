@@ -27,7 +27,7 @@ class Tag(Base):
 
 # Create an engine that stores data in the local directory's
 # sqlalchemy_example.db file.
-engine = create_engine('sqlite:///todosAndTags.db')
+engine = create_engine('sqlite:///todos_and_tags.db')
 
 # Create all tables in the engine. This is equivalent to "Create Table"
 # statements in raw SQL.

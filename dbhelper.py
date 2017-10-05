@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from todosAndTags import Base
 
 # Create all tables in the engine. This is equivalent to "Create Table"
 # statements in raw SQL.
@@ -8,7 +7,7 @@ from todosAndTags import Base
 
 
 def create_db_connection(app):
-    # Create an engine that stores data in the local directory's todosAndTags.db
-    app['engine'] = create_engine('sqlite:///todosAndTags.db')
+    # Create an engine that stores data in the local directory's todos_and_tags.db
+    app['engine'] = create_engine('sqlite:///todos_and_tags.db')
     app['session'] = sessionmaker(bind=app['engine'])
 

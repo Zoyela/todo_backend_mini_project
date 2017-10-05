@@ -50,6 +50,6 @@ class Tag(Base):
         return {
             "id": self.id,
             "name": self.name,
-            "todos": [todo.id for todo in self.todo]
+            "todos": [todo.id for todo in self.todos]
         }
 

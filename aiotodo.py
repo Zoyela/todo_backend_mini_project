@@ -222,6 +222,92 @@ def remove_tag(request):
 
     return web.json_response(status=204)
 
+# /todos/{id:\d+}/tags/
+def get_todo_tags(request):
+    id=int(request.match_info['id'])
+    session = request.app['session']()
+
+    try:
+        todo = session.query(Todo).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple todos with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no todo with the given id'
+        }, status=404)
+
+    return web.json_response([tag.to_dictionary() for tag in todo.tags], status=200)
+
+
+async def add_todo_tag(request):
+    id=int(request.match_info['id'])
+    session = request.app['session']()
+    data = await request.json()
+
+    try:
+        todo = session.query(Todo).filter_by(id=id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple todos with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no todo with the given id'
+        }, status=404)
+
+    try:
+        tag = session.query(Tag).filter_by(id=data['id']).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple tags with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no tag with the given id'
+        }, status=404)
+
+    todo.tags.append(tag)
+
+    session.commit()
+
+    return web.json_response(todo.to_dictionary(), status=200)
+
+
+async def delete_todo_tag(request):
+    todo_id=int(request.match_info['todo_id'])
+    tag_id=int(request.match_info['tag_id'])
+    session = request.app['session']()
+
+    try:
+        todo = session.query(Todo).filter_by(id=todo_id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple todos with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no todo with the given id'
+        }, status=404)
+
+    try:
+        tag = session.query(Tag).filter_by(id=tag_id).one()
+    except MultipleResultsFound:
+        return web.json_response({
+            'error': 'Found multiple tags with given id, not just one as expected'
+        }, status=500)
+    except NoResultFound:
+        return web.json_response({
+            'error': 'Found no tag with the given id'
+        }, status=404)
+
+    todo.tags.remove(tag)
+
+    session.commit()
+
+    return web.json_response(todo.to_dictionary(), status=200)
+
 
 def app_factory(args=()):
     app = web.Application()
@@ -250,6 +336,11 @@ def app_factory(args=()):
     cors.add(app.router.add_patch('/tags/{id:\d+}', update_tag, name='update_tag'))
     cors.add(app.router.add_delete('/tags/{id:\d+}', remove_tag, name='remove_tag'))
 
+    cors.add(app.router.add_get('/todos/{id:\d+}/tags/', get_todo_tags, name='get_todo_tags'))
+    cors.add(app.router.add_post('/todos/{id:\d+}/tags/', add_todo_tag, name='add_todo_tag'))
+    cors.add(app.router.add_delete('/todos/{todo_id:\d+}/tags/{tag_id:\d+}', delete_todo_tag, name='delete_todo_tag'))
+
+
     return app
 
 
@@ -261,7 +352,8 @@ def app_factory(args=()):
 # Delete a tag DELETE /tags/:tag_id ok
 
 # Todo
-# List all todos with a specific tag GET /todos/?tag=:tag_id
-# List all tags of a todo_ GET /todos/:todo_id/tags/
-# Tag a todo_ POST /todos/:todo_id/tags/
+# List all todos with a specific tag GET /todos/?tag=:tag_id ok
+# List all tags of a todo_ GET /todos/:todo_id/tags/ ok
+# Tag a todo_ POST /todos/:todo_id/tags/ ok
+
 # Remove a tag DELETE /todos/:todo_id/tags/:tag_id

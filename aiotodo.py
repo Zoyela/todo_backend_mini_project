@@ -129,7 +129,7 @@ def remove_todo(request):
 
     return web.json_response(status=204)
 
-# tags
+
 def get_all_tags(request):
     session = request.app['session']()
     tag_list = session.query(Tag).all()
